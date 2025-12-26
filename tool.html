@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>MCQ → Word Converter</title>
+
+<style>
+body{font-family:Arial;background:#f4f4f4;padding:20px}
+textarea{width:100%;height:380px;padding:10px}
+button{margin-top:15px;padding:12px 22px;font-size:16px}
+</style>
+</head>
+
+<body>
+
+<h2>MCQ → Classplus Word Converter</h2>
+<p>Free trial: 20 questions | Leave one blank line between questions</p>
+
+<textarea id="mcqInput"></textarea><br>
+<button onclick="generateWord()">Download Word</button>
+
+<script type="module">
+import {
+Document,Packer,Paragraph,Table,TableRow,TableCell,WidthType
+} from "https://cdn.jsdelivr.net/npm/docx@8.5.0/+esm";
+
+const LIMITS={free:20,starter:100,pro:500,institute:99999};
+const userPlan="free"; // change after login
+
+const clean=t=>(t||"").replace(/\s+/g," ").trim();
+
+function cleanQuestion(q){
+ return q.replace(/^(q(uestion)?[\s\-]*\d+[\.\)]*)/i,"")
+         .replace(/^(\d+[\.\)]*)/,"").trim();
+}
+
+function parseMCQs(text){
+ const blocks=text.trim().split(/\n\s*\n+/);
+ let mcqs=[];
+ blocks.forEach(b=>{
+  const lines=b.split("\n").map(l=>l.trim()).filter(Boolean);
+  let question="",options={},answer="",solution="";
+
+  for(let l of lines){
+   if(!/^[a-dA-D][\).\]]/.test(l)&&!/(ans|answer|correct|solution)/i.test(l)){
+    question=cleanQuestion(l);break;
+   }
+  }
+
+  lines.forEach(l=>{
+   const opt=l.match(/^\(?([a-dA-D])[\).\]]\s+(.*)$/);
+   if(opt){options[opt[1].toUpperCase()]=clean(opt[2]);return;}
+   if(/ans|answer|correct/i.test(l)){
+    const m=l.match(/\b([a-dA-D])\b/);
+    if(m)answer=m[1].toUpperCase();return;
+   }
+   if(/solution|explanation/i.test(l)){
+    solution=clean(l.replace(/.*[:\-]/,""));
+   }
+  });
+  mcqs.push({question,options,answer,solution});
+ });
+ return mcqs;
+}
+
+function row(a,b){
+ return new TableRow({children:[
+  new TableCell({width:{size:25,type:WidthType.PERCENTAGE},children:[new Paragraph(a)]}),
+  new TableCell({width:{size:75,type:WidthType.PERCENTAGE},children:[new Paragraph(b||"")]})
+ ]});
+}
+
+async function generateWord(){
+ const text=document.getElementById("mcqInput").value;
+ if(!text.trim())return alert("Paste MCQs");
+ const mcqs=parseMCQs(text);
+
+ if(mcqs.length>LIMITS[userPlan]){
+  alert("Limit exceeded. Please upgrade.");
+  return;
+ }
+
+ let content=[];
+ mcqs.forEach((m,i)=>{
+  content.push(new Table({
+   width:{size:100,type:WidthType.PERCENTAGE},
+   rows:[
+    row("Question No","Q"+(i+1)),
+    row("Question",m.question),
+    row("Option A",m.options.A),
+    row("Option B",m.options.B),
+    row("Option C",m.options.C),
+    row("Option D",m.options.D),
+    row("Correct Option",m.answer),
+    row("Solution",m.solution),
+    row("Marks","1")
+   ]
+  }),new Paragraph(""));
+ });
+
+ const doc=new Document({sections:[{children:content}]});
+ const blob=await Packer.toBlob(doc);
+ const a=document.createElement("a");
+ a.href=URL.createObjectURL(blob);
+ a.download="classplus_mcqs.docx";
+ a.click();
+}
+</script>
+
+</body>
+</html>
